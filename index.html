@@ -405,7 +405,7 @@
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await sb
         .from("sales_purchase_lots")
-        .select("id, name, type, created_at, client_id, supplier_id, clients(name, margin), suppliers(name)")
+        .select("id, name, type, created_at, client_id, supplier_id, clients(name), suppliers(name)")
         .eq("archived", false)
         .in("supplier_id", supplierIds)
         .order("created_at", { ascending: false })
@@ -645,8 +645,6 @@
       return;
     }
 
-    const margin = lot.clients?.margin ?? 1;
-    let totalBase = 0;
     let totalQuote = 0;
     let noPrice = 0;
     let gradeFromReception = 0;
@@ -658,10 +656,10 @@
         const p = basePriceOf(d);
         if (p.value === null) noPrice++;
         const base = p.value ?? 0;
-        totalBase += base;
-        totalQuote += round2(base * margin);
+        totalQuote += round2(base);
 
-        const quotePrice = round2(base * margin);
+        // Prix repris tel quel sur le devis : aucun coefficient n'est appliqué.
+        const quotePrice = round2(base);
 
         // FlutterFlow affiche sale_price_final : le prix de facturation importé y
         // est prioritaire, alors que le devis l'ignore. On le signale s'il diffère.
@@ -675,9 +673,6 @@
           (p.value === null
             ? `<span class="no-price">sans prix</span>`
             : `${fmtMoney(p.value)}<span class="tag ${p.source === "budget" ? "budget" : ""}">${p.source}</span>`) + ffTag;
-
-        const quotePriceCell =
-          p.value === null ? `<span class="no-price">${fmtMoney(0)}</span>` : fmtMoney(quotePrice);
 
         // Prix de cet appareil sur le devis actuel (repéré par sa référence)
         let onQuoteTd = "";
@@ -720,7 +715,6 @@
             <td>${gradeCell}</td>
             <td class="num">${d.price_new != null ? fmtMoney(d.price_new) : "-"}</td>
             <td class="num">${priceCell}</td>
-            <td class="num">${quotePriceCell}</td>
             ${onQuoteTd}
           </tr>`;
       })
@@ -730,11 +724,9 @@
       <h4>Contenu du lot</h4>
       <div class="summary">
         <strong>${devices.length}</strong> appareil(s)${gradeFromReception ? ` (dont <strong>${gradeFromReception}</strong> avec le grade de la réception, faute d'action qualité)` : ""} ·
-        Total prix de base <strong>${fmtMoney(totalBase)}</strong> ·
-        Coefficient client <strong>×${String(margin).replace(".", ",")}</strong> ·
-        Devis HT si généré maintenant <strong>${fmtMoney(totalQuote)}</strong>
+        Total HT du devis si généré maintenant <strong>${fmtMoney(totalQuote)}</strong>
       </div>
-      <div class="summary">Prix de base : avant coefficient client. Prix devis : prix de base × coefficient, tel qu'il apparaîtrait sur un devis généré maintenant.</div>
+      <div class="summary">Prix = prix repris tel quel sur le devis : personnalisé, sinon auto, sinon budget. Aucun coefficient n'est appliqué.</div>
       ${currentQuote ? `<div class="summary">Devis actuel <strong>${escapeHtml(currentQuote.reference)}</strong> : total HT <strong>${fmtMoney(currentQuote.subtotal_ht)}</strong></div>` : ""}
       ${differs || absentFromQuote ? `<div class="warn">⚠ ${differs} ligne(s) du devis actuel ont un autre prix que le calcul d'aujourd'hui${absentFromQuote ? `, ${absentFromQuote} appareil(s) absent(s) du devis` : ""} : il date d'avant une modification des prix (ou du lot). Générez un nouveau devis pour les appliquer.</div>` : ""}
       ${noPrice ? `<div class="warn">⚠ ${noPrice} appareil(s) sans prix : ils seraient comptés à 0 € dans le devis.</div>` : ""}
@@ -743,8 +735,7 @@
           <thead>
             <tr>
               <th>Code-barres</th><th>Réf. prestation</th><th>Type</th><th>Marque</th>
-              <th>Modèle</th><th>Grade</th><th class="num">Prix neuf</th><th class="num">Prix de base</th>
-              <th class="num">Prix devis (×coef.)</th>${hasQuoteLines ? '<th class="num">Devis actuel</th>' : ""}
+              <th>Modèle</th><th>Grade</th><th class="num">Prix neuf</th><th class="num">Prix</th>${hasQuoteLines ? '<th class="num">Devis actuel</th>' : ""}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
