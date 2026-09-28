@@ -522,8 +522,8 @@
       <div class="generate-bar">
         <button class="btn small" data-role="gen-quote">Générer un devis</button>
         <label>
-          <input type="checkbox" data-role="ref-interne" />
-          Référence interne (code-barres) au lieu de la référence prestation
+          <input type="checkbox" data-role="ref-externe" />
+          Référence externe (référence prestation) au lieu du code-barres
         </label>
         <button class="btn secondary small" data-role="recalc" title="Recalcule les prix automatiques du lot ; les prix personnalisés sont conservés">Recalculer les prix auto</button>
       </div>
@@ -548,9 +548,10 @@
     };
 
     const genQuoteBtn = actionsEl.querySelector('[data-role="gen-quote"]');
-    const refInterneBox = actionsEl.querySelector('[data-role="ref-interne"]');
+    const refExterneBox = actionsEl.querySelector('[data-role="ref-externe"]');
     genQuoteBtn.addEventListener("click", () =>
-      onGenerateQuote(ctx, genQuoteBtn, refInterneBox.checked)
+      // Par défaut : référence interne (code-barres). Case cochée : référence externe.
+      onGenerateQuote(ctx, genQuoteBtn, !refExterneBox.checked)
     );
 
     const recalcBtn = actionsEl.querySelector('[data-role="recalc"]');
