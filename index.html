@@ -153,6 +153,14 @@
   .muted { color: var(--muted); }
   .tag.reception { background: #2a2540; color: #b6a2ff; }
   .tag.ff { background: #3a2416; color: #ff9f6b; }
+  .transport-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .transport-bar label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .transport-bar input {
+    width: 190px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: #0c0e12; color: var(--text); font-size: 12px;
+  }
+  .transport-hint { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; }
+  .transport-hint.error { color: #ff8a8e; }
   .diff { color: #e9b949; font-weight: 600; }
 
   #emptyState, #loadingState, #errorState {
@@ -527,6 +535,15 @@
         </label>
         <button class="btn secondary small" data-role="recalc" title="Recalcule les prix automatiques du lot ; les prix personnalisés sont conservés">Recalculer les prix auto</button>
       </div>
+      <div class="transport-bar">
+        <label>Transport total, HT (€)
+          <input type="text" inputmode="decimal" data-role="transport-total" placeholder="0" />
+        </label>
+        <label>Ajouté au prix de chaque produit (€)
+          <input type="text" inputmode="decimal" data-role="transport-par-produit" placeholder="0" />
+        </label>
+      </div>
+      <div class="transport-hint" data-role="transport-hint"></div>
       <div class="msg" data-role="lot-msg"></div>
       <div data-role="explain"></div>
     `;
@@ -549,10 +566,29 @@
 
     const genQuoteBtn = actionsEl.querySelector('[data-role="gen-quote"]');
     const refExterneBox = actionsEl.querySelector('[data-role="ref-externe"]');
-    genQuoteBtn.addEventListener("click", () =>
+    const transportTotalInput = actionsEl.querySelector('[data-role="transport-total"]');
+    const transportPerInput = actionsEl.querySelector('[data-role="transport-par-produit"]');
+    const transportHintEl = actionsEl.querySelector('[data-role="transport-hint"]');
+    const readTransport = () => readTransportInputs(lot, transportTotalInput.value, transportPerInput.value);
+
+    // Aperçu en direct de ce que le devis contiendra (ou de l'erreur de saisie)
+    lot.updateTransportHint = () => {
+      const hint = transportHintText(lot, readTransport());
+      transportHintEl.className = "transport-hint" + (hint && hint.kind === "error" ? " error" : "");
+      transportHintEl.textContent = hint ? hint.text : "";
+    };
+    transportTotalInput.addEventListener("input", lot.updateTransportHint);
+    transportPerInput.addEventListener("input", lot.updateTransportHint);
+
+    genQuoteBtn.addEventListener("click", () => {
+      const transport = readTransport();
+      if (transport.error) {
+        ctx.lotMsg("error", transport.error);
+        return;
+      }
       // Par défaut : référence interne (code-barres). Case cochée : référence externe.
-      onGenerateQuote(ctx, genQuoteBtn, !refExterneBox.checked)
-    );
+      onGenerateQuote(ctx, genQuoteBtn, !refExterneBox.checked, transport);
+    });
 
     const recalcBtn = actionsEl.querySelector('[data-role="recalc"]');
     recalcBtn.addEventListener("click", () => onRecalculate(ctx, recalcBtn));
@@ -593,6 +629,41 @@
     return { value: null, source: null };
   }
 
+  // Montants de transport saisis : le total est facturé en entier ; une part est
+  // ajoutée au prix de chaque produit, le reste forme une ligne « Transport ».
+  function readTransportInputs(lot, rawTotal, rawPer) {
+    const total = String(rawTotal).trim() === "" ? 0 : parseAmount(rawTotal);
+    const perProduct = String(rawPer).trim() === "" ? 0 : parseAmount(rawPer);
+    if (!(total >= 0) || !(perProduct >= 0)) {
+      return { total: 0, perProduct: 0, error: "Montants de transport invalides : saisissez des nombres positifs." };
+    }
+    const n = lot.devicesCount;
+    if (n != null) {
+      const allocated = round2(perProduct * n);
+      if (allocated > total + 0.005) {
+        return {
+          total, perProduct,
+          error: `L'affectation par produit (${fmtMoney(perProduct)} × ${n} = ${fmtMoney(allocated)}) dépasse le transport total (${fmtMoney(total)}).`,
+        };
+      }
+    }
+    return { total, perProduct, error: null };
+  }
+
+  function transportHintText(lot, t) {
+    if (t.error) return { kind: "error", text: t.error };
+    if (t.total === 0 && t.perProduct === 0) return null;
+    const n = lot.devicesCount;
+    if (n == null) return { kind: "info", text: "Nombre de produits pas encore connu : le contenu du lot se charge." };
+    const allocated = round2(t.perProduct * n);
+    const line = round2(t.total - allocated);
+    const parts = [];
+    if (t.perProduct > 0) parts.push(`+${fmtMoney(t.perProduct)} sur chacun des ${n} produit(s) (${fmtMoney(allocated)})`);
+    parts.push(line > 0 ? `une ligne « Transport » de ${fmtMoney(line)}` : "aucune ligne « Transport » (tout est réparti sur les produits)");
+    const total = lot.previewTotal != null ? ` Total HT du devis : ${fmtMoney(round2(lot.previewTotal + t.total))}.` : "";
+    return { kind: "info", text: `Sur le devis : ${parts.join(" et ")}.${total}` };
+  }
+
   async function loadDevices(lot, el) {
     el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Chargement du contenu…</div>`;
 
@@ -621,11 +692,31 @@
 
     const currentQuote =
       !quoteRes.error && quoteRes.data && quoteRes.data.length ? quoteRes.data[0] : null;
+    // Par produit : prix figé sur le devis (unit), prix de l'outil à ce moment-là
+    // (base, sans la part de transport : c'est lui qu'on compare) et part de transport.
     const quoteUnitByRef = new Map();
+    let quoteTransportLine = null;
+    let quoteAllocation = 0;
     if (currentQuote && Array.isArray(currentQuote.lines_snapshot)) {
-      for (const l of currentQuote.lines_snapshot) quoteUnitByRef.set(String(l.reference), Number(l.unit_price));
+      for (const l of currentQuote.lines_snapshot) {
+        if (l.kind === "transport") {
+          quoteTransportLine = l;
+          continue;
+        }
+        const allocation = Number(l.allocation ?? 0);
+        quoteAllocation = Math.max(quoteAllocation, allocation);
+        quoteUnitByRef.set(String(l.reference), {
+          unit: Number(l.unit_price),
+          base: Number(l.base_unit_price ?? l.unit_price),
+          allocation,
+        });
+      }
     }
     const hasQuoteLines = quoteUnitByRef.size > 0;
+    const transportParts = [];
+    if (quoteTransportLine) transportParts.push(`ligne « Transport » ${fmtMoney(quoteTransportLine.unit_price)}`);
+    if (quoteAllocation > 0) transportParts.push(`+${fmtMoney(quoteAllocation)} sur chaque produit`);
+    const quoteTransportInfo = transportParts.length ? ` · transport : ${transportParts.join(", ")}` : "";
 
     if (error) {
       el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Erreur : ${escapeHtml(error.message)}</div>`;
@@ -685,11 +776,13 @@
           if (q === undefined) {
             absentFromQuote++;
             onQuoteTd = `<td class="num"><span class="muted">absent</span></td>`;
-          } else if (Math.abs(q - quotePrice) > 0.005) {
+          } else if (Math.abs(q.base - quotePrice) > 0.005) {
             differs++;
-            onQuoteTd = `<td class="num"><span class="diff" title="Le devis actuel a un autre prix que le calcul d'aujourd'hui">${fmtMoney(q)}</span></td>`;
+            onQuoteTd = `<td class="num"><span class="diff" title="Le devis actuel a un autre prix que le calcul d'aujourd'hui">${fmtMoney(q.unit)}</span></td>`;
+          } else if (q.allocation > 0) {
+            onQuoteTd = `<td class="num"><span title="Dont ${fmtMoney(q.allocation)} de transport ajouté à ce produit">${fmtMoney(q.unit)}</span></td>`;
           } else {
-            onQuoteTd = `<td class="num">${fmtMoney(q)}</td>`;
+            onQuoteTd = `<td class="num">${fmtMoney(q.unit)}</td>`;
           }
         }
 
@@ -725,10 +818,10 @@
       <h4>Contenu du lot</h4>
       <div class="summary">
         <strong>${devices.length}</strong> appareil(s)${gradeFromReception ? ` (dont <strong>${gradeFromReception}</strong> avec le grade de la réception, faute d'action qualité)` : ""} ·
-        Total HT du devis si généré maintenant <strong>${fmtMoney(totalQuote)}</strong>
+        Total HT des produits (hors transport) <strong>${fmtMoney(totalQuote)}</strong>
       </div>
       <div class="summary">Prix = prix repris tel quel sur le devis : personnalisé, sinon auto, sinon budget. Aucun coefficient n'est appliqué.</div>
-      ${currentQuote ? `<div class="summary">Devis actuel <strong>${escapeHtml(currentQuote.reference)}</strong> : total HT <strong>${fmtMoney(currentQuote.subtotal_ht)}</strong></div>` : ""}
+      ${currentQuote ? `<div class="summary">Devis actuel <strong>${escapeHtml(currentQuote.reference)}</strong> : total HT <strong>${fmtMoney(currentQuote.subtotal_ht)}</strong>${escapeHtml(quoteTransportInfo)}</div>` : ""}
       ${differs || absentFromQuote ? `<div class="warn">⚠ ${differs} ligne(s) du devis actuel ont un autre prix que le calcul d'aujourd'hui${absentFromQuote ? `, ${absentFromQuote} appareil(s) absent(s) du devis` : ""} : il date d'avant une modification des prix (ou du lot). Générez un nouveau devis pour les appliquer.</div>` : ""}
       ${noPrice ? `<div class="warn">⚠ ${noPrice} appareil(s) sans prix : ils seraient comptés à 0 € dans le devis.</div>` : ""}
       <div class="devices-wrap">
@@ -743,6 +836,9 @@
         </table>
       </div>
     `;
+
+    lot.previewTotal = totalQuote;
+    if (lot.updateTransportHint) lot.updateTransportHint();
   }
 
   // ------------------------------------------------------------
@@ -837,7 +933,7 @@
   // ------------------------------------------------------------
   // Génération d'un devis
   // ------------------------------------------------------------
-  async function onGenerateQuote(ctx, btn, refInterne) {
+  async function onGenerateQuote(ctx, btn, refInterne, transport = { total: 0, perProduct: 0 }) {
     const { lot } = ctx;
     ctx.clearLotMsg();
 
@@ -855,6 +951,8 @@
       const data = await callFunction("generate-quote", {
         sale_purchase_lot_id: lot.id,
         ref_interne: refInterne,
+        transport_total: transport.total,
+        transport_par_produit: transport.perProduct,
       });
       ctx.lotMsg("success", `Devis ${data.quote.reference} généré.`);
       await loadDocuments(ctx);
