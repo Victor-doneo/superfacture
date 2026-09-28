@@ -150,6 +150,8 @@
   }
   .tag.budget { background: #3a2f16; color: #e9b949; }
   .no-price { color: #ff8a8e; }
+  .muted { color: var(--muted); }
+  .tag.reception { background: #2a2540; color: #b6a2ff; }
 
   #emptyState, #loadingState, #errorState {
     text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px;
@@ -591,10 +593,19 @@
   async function loadDevices(lot, el) {
     el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Chargement du contenu…</div>`;
 
-    const { data, error } = await sb.rpc("get_salelot_devices", {
-      salelot_id_param: lot.id,
-      files_param: false,
-    });
+    // Le grade retenu par le calcul du prix (qualité, sinon réception) vient
+    // de explain_sale_lot_prices, pour ne pas dupliquer cette logique ici.
+    // Si cette fonction n'est pas installée, on affiche le grade qualité seul.
+    const [devicesRes, gradesRes] = await Promise.all([
+      sb.rpc("get_salelot_devices", { salelot_id_param: lot.id, files_param: false }),
+      sb.rpc("explain_sale_lot_prices", { p_sale_lot_id: lot.id }),
+    ]);
+    const { data, error } = devicesRes;
+
+    const gradeInfo = {};
+    if (!gradesRes.error) {
+      for (const g of gradesRes.data ?? []) gradeInfo[g.device_id] = g;
+    }
 
     if (error) {
       el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Erreur : ${escapeHtml(error.message)}</div>`;
@@ -619,6 +630,7 @@
     let totalBase = 0;
     let totalQuote = 0;
     let noPrice = 0;
+    let gradeFromReception = 0;
 
     const rows = devices
       .map((d) => {
@@ -633,6 +645,19 @@
             ? `<span class="no-price">sans prix</span>`
             : `${fmtMoney(p.value)}<span class="tag ${p.source === "budget" ? "budget" : ""}">${p.source}</span>`;
 
+        // Grade qualité si l'appareil en a un ; sinon celui de la dernière
+        // réception, signalé par une pastille, car c'est celui du calcul du prix.
+        let gradeCell;
+        const info = gradeInfo[d.id];
+        if (d.quality_grade) {
+          gradeCell = escapeHtml(d.quality_grade);
+        } else if (info && info.grade_utilise) {
+          gradeFromReception++;
+          gradeCell = `${escapeHtml(info.grade_utilise)}<span class="tag reception" title="Aucune action qualité : grade de la dernière réception, utilisé pour le calcul du prix auto">réception</span>`;
+        } else {
+          gradeCell = `<span class="muted">—</span>`;
+        }
+
         return `
           <tr>
             <td>${escapeHtml(d.barcode)}</td>
@@ -640,7 +665,7 @@
             <td>${escapeHtml(d.service_sub_category_name ?? "")}</td>
             <td>${escapeHtml(d.brand_name ?? "")}</td>
             <td>${escapeHtml(d.model ?? "")}</td>
-            <td>${escapeHtml(d.quality_grade ?? "")}</td>
+            <td>${gradeCell}</td>
             <td class="num">${d.price_new != null ? fmtMoney(d.price_new) : "-"}</td>
             <td class="num">${priceCell}</td>
           </tr>`;
@@ -650,7 +675,7 @@
     el.innerHTML = `
       <h4>Contenu du lot</h4>
       <div class="summary">
-        <strong>${devices.length}</strong> appareil(s) ·
+        <strong>${devices.length}</strong> appareil(s)${gradeFromReception ? ` (dont <strong>${gradeFromReception}</strong> avec le grade de la réception, faute d'action qualité)` : ""} ·
         Total prix de base <strong>${fmtMoney(totalBase)}</strong> ·
         Coefficient client <strong>×${String(margin).replace(".", ",")}</strong> ·
         Devis HT estimé <strong>${fmtMoney(totalQuote)}</strong>
