@@ -31,6 +31,7 @@
     margin-bottom: 24px;
   }
   header.top h1 { font-size: 20px; margin: 0; }
+  .filter-info { font-size: 12px; color: var(--muted); margin-top: 4px; }
   header.top .actions { display: flex; gap: 8px; }
   .btn {
     background: var(--accent); color: white; border: none; border-radius: var(--radius);
@@ -163,7 +164,10 @@
 
 <div class="container" id="appScreen" style="display:none;">
   <header class="top">
-    <h1>Lots en cours</h1>
+    <div>
+      <h1>Lots en cours</h1>
+      <div id="filterInfo" class="filter-info"></div>
+    </div>
     <div class="actions">
       <button class="btn secondary" id="refreshBtn">Actualiser</button>
       <button class="btn secondary" id="logoutBtn">Se déconnecter</button>
@@ -194,8 +198,13 @@
   const errorState = document.getElementById("errorState");
   const emptyState = document.getElementById("emptyState");
   const lotsList = document.getElementById("lotsList");
+  const filterInfo = document.getElementById("filterInfo");
 
   const EXCLUDED_STATUSES = ["Vendu", "Restitué", "Annulé", "Refusé"];
+
+  // Seuls les lots dont le fournisseur a un nom CONTENANT ce texte
+  // (insensible à la casse) sont affichés.
+  const SUPPLIER_FILTER = "doneo";
 
   // ------------------------------------------------------------
   // Utilitaires
@@ -354,7 +363,28 @@
     emptyState.style.display = "none";
     lotsList.innerHTML = "";
 
-    // 1. Tous les lots non archivés, avec client/fournisseur.
+    // 0. Fournisseur(s) correspondant au filtre (ex. DONEO)
+    const { data: suppliers, error: suppliersError } = await sb
+      .from("suppliers")
+      .select("id, name")
+      .ilike("name", `%${SUPPLIER_FILTER}%`);
+
+    if (suppliersError) {
+      loadingState.style.display = "none";
+      errorState.style.display = "block";
+      errorState.textContent = "Erreur de chargement des fournisseurs : " + suppliersError.message;
+      return;
+    }
+    if (!suppliers || suppliers.length === 0) {
+      loadingState.style.display = "none";
+      errorState.style.display = "block";
+      errorState.textContent = `Aucun fournisseur dont le nom contient « ${SUPPLIER_FILTER} » n'a été trouvé.`;
+      return;
+    }
+    const supplierIds = suppliers.map((sup) => sup.id);
+    filterInfo.textContent = "Fournisseur : " + suppliers.map((sup) => sup.name).join(", ");
+
+    // 1. Lots non archivés de ce(s) fournisseur(s), avec client/fournisseur.
     // Supabase renvoie au maximum 1000 lignes par requête : on lit par
     // pages successives pour ne rien tronquer.
     const PAGE_SIZE = 1000;
@@ -364,6 +394,7 @@
         .from("sales_purchase_lots")
         .select("id, name, type, created_at, client_id, supplier_id, clients(name, margin), suppliers(name)")
         .eq("archived", false)
+        .in("supplier_id", supplierIds)
         .order("created_at", { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
 
@@ -481,6 +512,7 @@
           <input type="checkbox" data-role="ref-interne" />
           Référence interne (code-barres) au lieu de la référence prestation
         </label>
+        <button class="btn secondary small" data-role="recalc" title="Recalcule les prix automatiques du lot ; les prix personnalisés sont conservés">Recalculer les prix auto</button>
       </div>
       <div class="msg" data-role="lot-msg"></div>
     `;
@@ -495,6 +527,7 @@
     const ctx = {
       lot,
       docsEl,
+      devicesEl,
       lotMsg: (kind, text) => showMsg(lotMsgEl, kind, text),
       clearLotMsg: () => clearMsg(lotMsgEl),
     };
@@ -504,6 +537,9 @@
     genQuoteBtn.addEventListener("click", () =>
       onGenerateQuote(ctx, genQuoteBtn, refInterneBox.checked)
     );
+
+    const recalcBtn = actionsEl.querySelector('[data-role="recalc"]');
+    recalcBtn.addEventListener("click", () => onRecalculate(ctx, recalcBtn));
 
     let loaded = false;
     header.addEventListener("click", async () => {
@@ -555,6 +591,14 @@
     }
 
     const devices = unwrapDevices(data);
+
+    // Mémorisé pour comparer avant/après un recalcul des prix auto
+    lot.devicesCount = devices.length;
+    lot.autoBefore = {};
+    for (const d of devices) {
+      lot.autoBefore[d.id] = d.sale_price_client != null ? Number(d.sale_price_client) : null;
+    }
+
     if (devices.length === 0) {
       el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Aucun appareil dans ce lot.</div>`;
       return;
@@ -731,6 +775,54 @@
     } catch (e) {
       const already = /déjà émis/i.test(e.message);
       ctx.lotMsg(already ? "info" : "error", already ? "Devis déjà émis : rien n'a changé depuis le dernier devis." : e.message);
+    } finally {
+      setBusy(btn, false);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Recalcul des prix AUTO d'un lot (les prix personnalisés sont conservés)
+  // ------------------------------------------------------------
+  function sameAmount(a, b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return Math.abs(Number(a) - Number(b)) < 0.005;
+  }
+
+  async function onRecalculate(ctx, btn) {
+    const { lot } = ctx;
+    ctx.clearLotMsg();
+
+    const ok = confirm(
+      `Recalculer les prix automatiques de tous les appareils du lot « ${lot.name} » ?\n\n` +
+      `Les prix personnalisés ne sont pas modifiés.\n` +
+      `Les devis déjà émis ne changent pas : générez-en un nouveau pour appliquer les nouveaux prix.`
+    );
+    if (!ok) return;
+
+    setBusy(btn, true, "Recalcul…");
+    try {
+      const { data, error } = await sb.rpc("recalculate_sale_lot_prices", { p_sale_lot_id: lot.id });
+      if (error) throw new Error(error.message);
+
+      const rows = data ?? [];
+      const empty = rows.filter((r) => r.new_auto_sale_price == null).length;
+      const changed = lot.autoBefore
+        ? rows.filter((r) => !sameAmount(lot.autoBefore[r.device_id], r.new_auto_sale_price)).length
+        : null;
+      const skipped = lot.devicesCount != null ? Math.max(lot.devicesCount - rows.length, 0) : 0;
+
+      let text = `Prix auto recalculés pour ${rows.length} appareil(s)`;
+      if (changed !== null) text += `, dont ${changed} modifié(s)`;
+      text += ".";
+      if (empty > 0) text += ` ${empty} sans prix auto calculé : le prix budget s'applique.`;
+      if (skipped > 0) text += ` ${skipped} ignoré(s) : aucune action « Lot de vente » pour ces appareils.`;
+      text += " Les prix personnalisés n'ont pas été touchés.";
+      ctx.lotMsg(empty > 0 || skipped > 0 ? "info" : "success", text);
+
+      await loadDevices(lot, ctx.devicesEl);
+    } catch (e) {
+      ctx.lotMsg("error", "Recalcul impossible : " + e.message);
     } finally {
       setBusy(btn, false);
     }
