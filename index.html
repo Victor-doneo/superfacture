@@ -152,6 +152,8 @@
   .no-price { color: #ff8a8e; }
   .muted { color: var(--muted); }
   .tag.reception { background: #2a2540; color: #b6a2ff; }
+  .tag.ff { background: #3a2416; color: #ff9f6b; }
+  .diff { color: #e9b949; font-weight: 600; }
 
   #emptyState, #loadingState, #errorState {
     text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px;
@@ -596,9 +598,18 @@
     // Le grade retenu par le calcul du prix (qualité, sinon réception) vient
     // de explain_sale_lot_prices, pour ne pas dupliquer cette logique ici.
     // Si cette fonction n'est pas installée, on affiche le grade qualité seul.
-    const [devicesRes, gradesRes] = await Promise.all([
+    // Le devis actuel (lignes figées à sa génération) sert à repérer les écarts
+    // entre les prix d'aujourd'hui et ceux qu'il contient.
+    const [devicesRes, gradesRes, quoteRes] = await Promise.all([
       sb.rpc("get_salelot_devices", { salelot_id_param: lot.id, files_param: false }),
       sb.rpc("explain_sale_lot_prices", { p_sale_lot_id: lot.id }),
+      sb
+        .from("quote")
+        .select("reference, subtotal_ht, lines_snapshot")
+        .eq("sale_purchase_lot_id", lot.id)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(1),
     ]);
     const { data, error } = devicesRes;
 
@@ -606,6 +617,14 @@
     if (!gradesRes.error) {
       for (const g of gradesRes.data ?? []) gradeInfo[g.device_id] = g;
     }
+
+    const currentQuote =
+      !quoteRes.error && quoteRes.data && quoteRes.data.length ? quoteRes.data[0] : null;
+    const quoteUnitByRef = new Map();
+    if (currentQuote && Array.isArray(currentQuote.lines_snapshot)) {
+      for (const l of currentQuote.lines_snapshot) quoteUnitByRef.set(String(l.reference), Number(l.unit_price));
+    }
+    const hasQuoteLines = quoteUnitByRef.size > 0;
 
     if (error) {
       el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Erreur : ${escapeHtml(error.message)}</div>`;
@@ -631,6 +650,8 @@
     let totalQuote = 0;
     let noPrice = 0;
     let gradeFromReception = 0;
+    let differs = 0;
+    let absentFromQuote = 0;
 
     const rows = devices
       .map((d) => {
@@ -640,10 +661,41 @@
         totalBase += base;
         totalQuote += round2(base * margin);
 
+        const quotePrice = round2(base * margin);
+
+        // FlutterFlow affiche sale_price_final : le prix de facturation importé y
+        // est prioritaire, alors que le devis l'ignore. On le signale s'il diffère.
+        const ffFinal = d.sale_price_final != null ? Number(d.sale_price_final) : null;
+        const ffTag =
+          ffFinal !== null && Math.abs(ffFinal - base) > 0.005
+            ? `<span class="tag ff" title="FlutterFlow affiche ce prix : le prix de facturation importé y est prioritaire, mais pas dans le devis">FlutterFlow ${fmtMoney(ffFinal)}</span>`
+            : "";
+
         const priceCell =
-          p.value === null
+          (p.value === null
             ? `<span class="no-price">sans prix</span>`
-            : `${fmtMoney(p.value)}<span class="tag ${p.source === "budget" ? "budget" : ""}">${p.source}</span>`;
+            : `${fmtMoney(p.value)}<span class="tag ${p.source === "budget" ? "budget" : ""}">${p.source}</span>`) + ffTag;
+
+        const quotePriceCell =
+          p.value === null ? `<span class="no-price">${fmtMoney(0)}</span>` : fmtMoney(quotePrice);
+
+        // Prix de cet appareil sur le devis actuel (repéré par sa référence)
+        let onQuoteTd = "";
+        if (hasQuoteLines) {
+          let q = quoteUnitByRef.get(String(d.barcode));
+          if (q === undefined && d.service_provision_reference) {
+            q = quoteUnitByRef.get(String(d.service_provision_reference));
+          }
+          if (q === undefined) {
+            absentFromQuote++;
+            onQuoteTd = `<td class="num"><span class="muted">absent</span></td>`;
+          } else if (Math.abs(q - quotePrice) > 0.005) {
+            differs++;
+            onQuoteTd = `<td class="num"><span class="diff" title="Le devis actuel a un autre prix que le calcul d'aujourd'hui">${fmtMoney(q)}</span></td>`;
+          } else {
+            onQuoteTd = `<td class="num">${fmtMoney(q)}</td>`;
+          }
+        }
 
         // Grade qualité si l'appareil en a un ; sinon celui de la dernière
         // réception, signalé par une pastille, car c'est celui du calcul du prix.
@@ -668,6 +720,8 @@
             <td>${gradeCell}</td>
             <td class="num">${d.price_new != null ? fmtMoney(d.price_new) : "-"}</td>
             <td class="num">${priceCell}</td>
+            <td class="num">${quotePriceCell}</td>
+            ${onQuoteTd}
           </tr>`;
       })
       .join("");
@@ -678,15 +732,19 @@
         <strong>${devices.length}</strong> appareil(s)${gradeFromReception ? ` (dont <strong>${gradeFromReception}</strong> avec le grade de la réception, faute d'action qualité)` : ""} ·
         Total prix de base <strong>${fmtMoney(totalBase)}</strong> ·
         Coefficient client <strong>×${String(margin).replace(".", ",")}</strong> ·
-        Devis HT estimé <strong>${fmtMoney(totalQuote)}</strong>
+        Devis HT si généré maintenant <strong>${fmtMoney(totalQuote)}</strong>
       </div>
+      <div class="summary">Prix de base : avant coefficient client. Prix devis : prix de base × coefficient, tel qu'il apparaîtrait sur un devis généré maintenant.</div>
+      ${currentQuote ? `<div class="summary">Devis actuel <strong>${escapeHtml(currentQuote.reference)}</strong> : total HT <strong>${fmtMoney(currentQuote.subtotal_ht)}</strong></div>` : ""}
+      ${differs || absentFromQuote ? `<div class="warn">⚠ ${differs} ligne(s) du devis actuel ont un autre prix que le calcul d'aujourd'hui${absentFromQuote ? `, ${absentFromQuote} appareil(s) absent(s) du devis` : ""} : il date d'avant une modification des prix (ou du lot). Générez un nouveau devis pour les appliquer.</div>` : ""}
       ${noPrice ? `<div class="warn">⚠ ${noPrice} appareil(s) sans prix : ils seraient comptés à 0 € dans le devis.</div>` : ""}
       <div class="devices-wrap">
         <table class="devices">
           <thead>
             <tr>
               <th>Code-barres</th><th>Réf. prestation</th><th>Type</th><th>Marque</th>
-              <th>Modèle</th><th>Grade</th><th class="num">Prix neuf</th><th class="num">Prix</th>
+              <th>Modèle</th><th>Grade</th><th class="num">Prix neuf</th><th class="num">Prix de base</th>
+              <th class="num">Prix devis (×coef.)</th>${hasQuoteLines ? '<th class="num">Devis actuel</th>' : ""}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
