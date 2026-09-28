@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Suivi des lots — Devis & Factures</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e7e9ee;
+    --muted: #8b93a3;
+    --accent: #4f7cff;
+    --accent-hover: #3a63e0;
+    --danger: #e5484d;
+    --success: #2fbf71;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px 64px; }
+  header.top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  header.top h1 { font-size: 20px; margin: 0; }
+  .btn {
+    background: var(--accent); color: white; border: none; border-radius: var(--radius);
+    padding: 8px 16px; font-size: 14px; cursor: pointer; font-weight: 600;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn.secondary:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Login */
+  #loginScreen {
+    max-width: 360px; margin: 80px auto; background: var(--panel);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 32px;
+  }
+  #loginScreen h2 { margin-top: 0; font-size: 18px; }
+  #loginScreen label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  #loginScreen input {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: #0c0e12; color: var(--text); font-size: 14px;
+  }
+  #loginScreen .btn { width: 100%; margin-top: 20px; padding: 10px; }
+  #loginError { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  /* Lots */
+  .lot-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .lot-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; cursor: pointer;
+  }
+  .lot-header:hover { background: #1b1f28; }
+  .lot-title { font-size: 15px; font-weight: 600; }
+  .lot-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .status-badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600;
+    background: #23304a; color: #7ea6ff; white-space: nowrap;
+  }
+  .lot-body { display: none; padding: 0 18px 16px; border-top: 1px solid var(--border); }
+  .lot-body.open { display: block; }
+  .doc-section { margin-top: 14px; }
+  .doc-section h4 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); margin: 0 0 8px;
+  }
+  .doc-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .doc-row:last-child { border-bottom: none; }
+  .doc-ref { font-weight: 600; }
+  .doc-meta { color: var(--muted); font-size: 12px; }
+  .doc-actions { display: flex; gap: 8px; }
+  .doc-actions a {
+    font-size: 12px; padding: 5px 10px; border-radius: 6px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text);
+  }
+  .doc-actions a:hover { border-color: var(--accent); color: var(--accent); }
+  .empty-note { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0; }
+
+  #emptyState, #loadingState, #errorState {
+    text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px;
+  }
+  #errorState { color: var(--danger); }
+  .chevron { transition: transform 0.15s; color: var(--muted); }
+  .chevron.open { transform: rotate(90deg); }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <h2>Connexion</h2>
+  <label for="email">Email</label>
+  <input id="email" type="email" autocomplete="username" />
+  <label for="password">Mot de passe</label>
+  <input id="password" type="password" autocomplete="current-password" />
+  <button class="btn" id="loginBtn">Se connecter</button>
+  <div id="loginError"></div>
+</div>
+
+<div class="container" id="appScreen" style="display:none;">
+  <header class="top">
+    <h1>Lots en cours</h1>
+    <button class="btn secondary" id="logoutBtn">Se déconnecter</button>
+  </header>
+
+  <div id="loadingState">Chargement des lots…</div>
+  <div id="errorState" style="display:none;"></div>
+  <div id="emptyState" style="display:none;">Aucun lot actif pour le moment.</div>
+  <div id="lotsList"></div>
+</div>
+
+<script>
+  // ============================================================
+  // ⚠️ À REMPLIR avant déploiement
+  // ============================================================
+  const SUPABASE_URL = "https://zvqoxgugzfxbkhmqgvdk.supabase.co";
+  const SUPABASE_ANON_KEY = "VOTRE_CLE_ANON_ICI";
+  // ============================================================
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const loginScreen = document.getElementById("loginScreen");
+  const appScreen = document.getElementById("appScreen");
+  const loginError = document.getElementById("loginError");
+  const loadingState = document.getElementById("loadingState");
+  const errorState = document.getElementById("errorState");
+  const emptyState = document.getElementById("emptyState");
+  const lotsList = document.getElementById("lotsList");
+
+  async function init() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      showApp();
+    } else {
+      showLogin();
+    }
+  }
+
+  function showLogin() {
+    loginScreen.style.display = "block";
+    appScreen.style.display = "none";
+  }
+
+  function showApp() {
+    loginScreen.style.display = "none";
+    appScreen.style.display = "block";
+    loadLots();
+  }
+
+  document.getElementById("loginBtn").addEventListener("click", async () => {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    loginError.textContent = "";
+
+    if (!email || !password) {
+      loginError.textContent = "Email et mot de passe requis.";
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      loginError.textContent = "Connexion échouée : " + error.message;
+      return;
+    }
+    showApp();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", async () => {
+    await supabase.auth.signOut();
+    showLogin();
+  });
+
+  function fmtDate(d) {
+    if (!d) return "-";
+    return new Date(d).toLocaleDateString("fr-FR");
+  }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined) return "-";
+    return Number(n).toFixed(2) + " €";
+  }
+
+  const EXCLUDED_STATUSES = ["Vendu", "Restitué", "Annulé", "Refusé"];
+
+  async function loadLots() {
+    loadingState.style.display = "block";
+    errorState.style.display = "none";
+    emptyState.style.display = "none";
+    lotsList.innerHTML = "";
+
+    // 1. Tous les lots non archivés, avec client/fournisseur
+    const { data: lots, error: lotsError } = await supabase
+      .from("sales_purchase_lots")
+      .select("id, name, type, created_at, client_id, supplier_id, clients(name), suppliers(name)")
+      .eq("archived", false)
+      .order("created_at", { ascending: false });
+
+    if (lotsError) {
+      loadingState.style.display = "none";
+      errorState.style.display = "block";
+      errorState.textContent = "Erreur de chargement des lots : " + lotsError.message;
+      return;
+    }
+
+    if (!lots || lots.length === 0) {
+      loadingState.style.display = "none";
+      emptyState.style.display = "block";
+      return;
+    }
+
+    // 2. Toutes les actions de ces lots, triées du plus récent au plus
+    // ancien — on ne garde que la première rencontrée par lot (= la
+    // plus récente) pour connaître son statut actuel.
+    const lotIds = lots.map((l) => l.id);
+    const { data: actions, error: actionsError } = await supabase
+      .from("sales_purchase_lot_actions")
+      .select("sales_purchase_lot_id, status, created_at")
+      .eq("archived", false)
+      .in("sales_purchase_lot_id", lotIds)
+      .order("created_at", { ascending: false });
+
+    loadingState.style.display = "none";
+
+    if (actionsError) {
+      errorState.style.display = "block";
+      errorState.textContent = "Erreur de chargement des statuts : " + actionsError.message;
+      return;
+    }
+
+    const latestStatusByLot = {};
+    for (const a of actions ?? []) {
+      if (!(a.sales_purchase_lot_id in latestStatusByLot)) {
+        latestStatusByLot[a.sales_purchase_lot_id] = a.status;
+      }
+    }
+
+    // 3. Filtrage : garder seulement les lots avec un statut connu,
+    // qui n'est pas dans la liste exclue
+    const activeLots = lots
+      .filter((lot) => {
+        const status = latestStatusByLot[lot.id];
+        return status && !EXCLUDED_STATUSES.includes(status);
+      })
+      .map((lot) => ({
+        ...lot,
+        client_name: lot.clients?.name ?? null,
+        supplier_name: lot.suppliers?.name ?? null,
+        last_status: latestStatusByLot[lot.id],
+      }));
+
+    if (activeLots.length === 0) {
+      emptyState.style.display = "block";
+      return;
+    }
+
+    for (const lot of activeLots) {
+      lotsList.appendChild(renderLotCard(lot));
+    }
+  }
+
+  function renderLotCard(lot) {
+    const card = document.createElement("div");
+    card.className = "lot-card";
+
+    const header = document.createElement("div");
+    header.className = "lot-header";
+    header.innerHTML = `
+      <div>
+        <div class="lot-title">${escapeHtml(lot.name)}</div>
+        <div class="lot-sub">${escapeHtml(lot.client_name ?? "-")} · ${escapeHtml(lot.supplier_name ?? "-")}</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="status-badge">${escapeHtml(lot.last_status ?? "-")}</span>
+        <span class="chevron">▶</span>
+      </div>
+    `;
+
+    const body = document.createElement("div");
+    body.className = "lot-body";
+    body.innerHTML = `<div class="empty-note">Chargement des documents…</div>`;
+
+    let loaded = false;
+    header.addEventListener("click", async () => {
+      const isOpen = body.classList.toggle("open");
+      header.querySelector(".chevron").classList.toggle("open", isOpen);
+      if (isOpen && !loaded) {
+        loaded = true;
+        await renderDocuments(body, lot.id);
+      }
+    });
+
+    card.appendChild(header);
+    card.appendChild(body);
+    return card;
+  }
+
+  async function renderDocuments(container, lotId) {
+    const { data: quotes, error: quotesError } = await supabase
+      .from("quote")
+      .select("id, reference, status, total_ttc, pdf_url, created_at")
+      .eq("sale_purchase_lot_id", lotId)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false });
+
+    if (quotesError) {
+      container.innerHTML = `<div class="empty-note">Erreur devis : ${escapeHtml(quotesError.message)}</div>`;
+      return;
+    }
+
+    const quoteIds = (quotes ?? []).map((q) => q.id);
+    let invoices = [];
+    if (quoteIds.length > 0) {
+      const { data: inv, error: invError } = await supabase
+        .from("invoice")
+        .select("id, reference, status, total_ttc, pdf_url, created_at, quote_id")
+        .in("quote_id", quoteIds)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false });
+      if (!invError) invoices = inv ?? [];
+    }
+
+    container.innerHTML = `
+      <div class="doc-section">
+        <h4>Devis</h4>
+        ${
+          quotes && quotes.length
+            ? quotes.map(docRowHtml).join("")
+            : `<div class="empty-note">Aucun devis actif.</div>`
+        }
+      </div>
+      <div class="doc-section">
+        <h4>Factures</h4>
+        ${
+          invoices.length
+            ? invoices.map(docRowHtml).join("")
+            : `<div class="empty-note">Aucune facture active.</div>`
+        }
+      </div>
+    `;
+  }
+
+  function docRowHtml(doc) {
+    const hasPdf = !!doc.pdf_url;
+    return `
+      <div class="doc-row">
+        <div>
+          <div class="doc-ref">${escapeHtml(doc.reference)}</div>
+          <div class="doc-meta">${fmtDate(doc.created_at)} · ${fmtMoney(doc.total_ttc)} · ${escapeHtml(doc.status)}</div>
+        </div>
+        <div class="doc-actions">
+          ${
+            hasPdf
+              ? `<a href="${doc.pdf_url}" target="_blank" rel="noopener">Aperçu</a>
+                 <a href="${doc.pdf_url}" download>Télécharger</a>`
+              : `<span class="doc-meta">PDF indisponible</span>`
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  init();
+</script>
+
+</body>
+</html>
