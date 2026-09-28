@@ -109,6 +109,15 @@
   .msg.error { background: #2b1416; color: #ff8a8e; }
   .msg.info { background: #1c2436; color: #8fb0ff; }
 
+  .explain {
+    margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border);
+    border-radius: 8px; background: #12151b; font-size: 12px;
+  }
+  .explain-title { font-weight: 600; margin-bottom: 8px; }
+  .explain-row { margin: 6px 0; line-height: 1.5; }
+  .explain-row .codes { color: var(--muted); }
+  .explain-alert { margin-top: 8px; color: #e9b949; }
+  .explain-note { color: var(--muted); }
   .invoice-panel {
     display: none; margin: 4px 0 10px; padding: 12px; border: 1px dashed var(--border);
     border-radius: 8px; background: #12151b;
@@ -515,6 +524,7 @@
         <button class="btn secondary small" data-role="recalc" title="Recalcule les prix automatiques du lot ; les prix personnalisés sont conservés">Recalculer les prix auto</button>
       </div>
       <div class="msg" data-role="lot-msg"></div>
+      <div data-role="explain"></div>
     `;
 
     const docsEl = document.createElement("div");
@@ -528,6 +538,7 @@
       lot,
       docsEl,
       devicesEl,
+      explainEl: actionsEl.querySelector('[data-role="explain"]'),
       lotMsg: (kind, text) => showMsg(lotMsgEl, kind, text),
       clearLotMsg: () => clearMsg(lotMsgEl),
     };
@@ -792,6 +803,7 @@
   async function onRecalculate(ctx, btn) {
     const { lot } = ctx;
     ctx.clearLotMsg();
+    ctx.explainEl.innerHTML = "";
 
     const ok = confirm(
       `Recalculer les prix automatiques de tous les appareils du lot « ${lot.name} » ?\n\n` +
@@ -820,12 +832,59 @@
       text += " Les prix personnalisés n'ont pas été touchés.";
       ctx.lotMsg(empty > 0 || skipped > 0 ? "info" : "success", text);
 
+      if (empty > 0) {
+        await showExplanation(ctx, rows.filter((r) => r.new_auto_sale_price == null));
+      }
+
       await loadDevices(lot, ctx.devicesEl);
     } catch (e) {
       ctx.lotMsg("error", "Recalcul impossible : " + e.message);
     } finally {
       setBusy(btn, false);
     }
+  }
+
+  // Explique pourquoi certains prix auto sont restés vides. La fonction SQL
+  // s'exécute avec les droits de l'utilisateur connecté, comme le calcul.
+  async function showExplanation(ctx, emptyRows) {
+    const { lot, explainEl } = ctx;
+    const title = `<div class="explain-title">Pourquoi des prix vides ?</div>`;
+
+    const { data, error } = await sb.rpc("explain_sale_lot_prices", { p_sale_lot_id: lot.id });
+    if (error) {
+      explainEl.innerHTML = `<div class="explain">${title}<div class="explain-note">Explication indisponible (${escapeHtml(error.message)}). Installez explain_sale_lot_prices.sql dans Supabase.</div></div>`;
+      return;
+    }
+
+    const byDevice = Object.fromEntries((data ?? []).map((r) => [r.device_id, r]));
+    const groups = {};
+    const inconsistent = [];
+    for (const row of emptyRows) {
+      const e = byDevice[row.device_id];
+      if (e && e.cause_code === "ok") {
+        inconsistent.push(e.barcode);
+        continue;
+      }
+      const key = e ? e.cause_code : "inconnu";
+      const text = e ? e.premier_blocage : "Appareil introuvable par l'explication (non lisible par votre compte ?)";
+      const label = e ? e.barcode : "?";
+      (groups[key] = groups[key] || { text, barcodes: [] }).barcodes.push(label);
+    }
+
+    const rows = Object.values(groups)
+      .sort((a, b) => b.barcodes.length - a.barcodes.length)
+      .map((g) => {
+        const shown = g.barcodes.slice(0, 5).map(escapeHtml).join(", ");
+        const more = g.barcodes.length > 5 ? ` (+${g.barcodes.length - 5})` : "";
+        return `<div class="explain-row"><strong>${g.barcodes.length} appareil(s)</strong> — ${escapeHtml(g.text)}<div class="codes">${shown}${more}</div></div>`;
+      })
+      .join("");
+
+    const alert = inconsistent.length
+      ? `<div class="explain-alert">Incohérence : pour ${inconsistent.length} appareil(s) (${inconsistent.slice(0, 5).map(escapeHtml).join(", ")}), l'explication prévoit un prix mais le calcul n'en a pas produit. Envoyez une capture de ce message.</div>`
+      : "";
+
+    explainEl.innerHTML = `<div class="explain">${title}${rows}${alert}</div>`;
   }
 
   // ------------------------------------------------------------
