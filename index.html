@@ -203,47 +203,72 @@
     emptyState.style.display = "none";
     lotsList.innerHTML = "";
 
-    // 1. Tous les lots non archivés, avec client/fournisseur
-    const { data: lots, error: lotsError } = await sb
-      .from("sales_purchase_lots")
-      .select("id, name, type, created_at, client_id, supplier_id, clients(name), suppliers(name)")
-      .eq("archived", false)
-      .order("created_at", { ascending: false });
+    // 1. Tous les lots non archivés, avec client/fournisseur.
+    // Supabase renvoie au maximum 1000 lignes par requête : on lit par
+    // pages successives pour ne rien tronquer.
+    const PAGE_SIZE = 1000;
+    let lots = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await sb
+        .from("sales_purchase_lots")
+        .select("id, name, type, created_at, client_id, supplier_id, clients(name), suppliers(name)")
+        .eq("archived", false)
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
-    if (lotsError) {
-      loadingState.style.display = "none";
-      errorState.style.display = "block";
-      errorState.textContent = "Erreur de chargement des lots : " + lotsError.message;
-      return;
+      if (error) {
+        loadingState.style.display = "none";
+        errorState.style.display = "block";
+        errorState.textContent = "Erreur de chargement des lots : " + error.message;
+        return;
+      }
+      lots = lots.concat(data ?? []);
+      if (!data || data.length < PAGE_SIZE) break;
     }
 
-    if (!lots || lots.length === 0) {
+    if (lots.length === 0) {
       loadingState.style.display = "none";
       emptyState.style.display = "block";
       return;
     }
 
-    // 2. Toutes les actions de ces lots, triées du plus récent au plus
-    // ancien — on ne garde que la première rencontrée par lot (= la
-    // plus récente) pour connaître son statut actuel.
-    const lotIds = lots.map((l) => l.id);
-    const { data: actions, error: actionsError } = await sb
-      .from("sales_purchase_lot_actions")
-      .select("sales_purchase_lot_id, status, created_at")
-      .eq("archived", false)
-      .in("sales_purchase_lot_id", lotIds)
-      .order("created_at", { ascending: false });
+    // 2. Actions de ces lots, triées du plus récent au plus ancien : on
+    // garde la première rencontrée par lot (= la plus récente) pour
+    // connaître son statut actuel.
+    // Les identifiants sont envoyés par petits paquets : tous dans une
+    // seule URL, elle devient trop longue et la requête échoue.
+    const CHUNK_SIZE = 30;
+    const chunks = [];
+    for (let i = 0; i < lots.length; i += CHUNK_SIZE) {
+      chunks.push(lots.slice(i, i + CHUNK_SIZE).map((l) => l.id));
+    }
+
+    const results = await Promise.all(
+      chunks.map((ids) =>
+        sb
+          .from("sales_purchase_lot_actions")
+          .select("sales_purchase_lot_id, status, created_at")
+          .eq("archived", false)
+          .in("sales_purchase_lot_id", ids)
+          .order("created_at", { ascending: false })
+      )
+    );
 
     loadingState.style.display = "none";
 
-    if (actionsError) {
+    const failed = results.find((r) => r.error);
+    if (failed) {
       errorState.style.display = "block";
-      errorState.textContent = "Erreur de chargement des statuts : " + actionsError.message;
+      errorState.textContent = "Erreur de chargement des statuts : " + failed.error.message;
       return;
     }
 
+    const actions = results
+      .flatMap((r) => r.data ?? [])
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
     const latestStatusByLot = {};
-    for (const a of actions ?? []) {
+    for (const a of actions) {
       if (!(a.sales_purchase_lot_id in latestStatusByLot)) {
         latestStatusByLot[a.sales_purchase_lot_id] = a.status;
       }
