@@ -25,12 +25,13 @@
     background: var(--bg);
     color: var(--text);
   }
-  .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px 64px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
   header.top {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 24px;
   }
   header.top h1 { font-size: 20px; margin: 0; }
+  header.top .actions { display: flex; gap: 8px; }
   .btn {
     background: var(--accent); color: white; border: none; border-radius: var(--radius);
     padding: 8px 16px; font-size: 14px; cursor: pointer; font-weight: 600;
@@ -38,6 +39,7 @@
   .btn:hover { background: var(--accent-hover); }
   .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
   .btn.secondary:hover { border-color: var(--accent); }
+  .btn.small { padding: 6px 12px; font-size: 12px; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Login */
@@ -70,27 +72,74 @@
     font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600;
     background: #23304a; color: #7ea6ff; white-space: nowrap;
   }
-  .lot-body { display: none; padding: 0 18px 16px; border-top: 1px solid var(--border); }
+  .lot-body { display: none; padding: 0 18px 18px; border-top: 1px solid var(--border); }
   .lot-body.open { display: block; }
-  .doc-section { margin-top: 14px; }
-  .doc-section h4 {
+  .lot-section { margin-top: 18px; }
+  .lot-section h4 {
     font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
     color: var(--muted); margin: 0 0 8px;
   }
+  .generate-bar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+  .generate-bar label {
+    font-size: 12px; color: var(--muted); display: flex; gap: 6px;
+    align-items: center; cursor: pointer;
+  }
+
   .doc-row {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
     padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
   }
-  .doc-row:last-child { border-bottom: none; }
+  .doc-item:last-child .doc-row { border-bottom: none; }
   .doc-ref { font-weight: 600; }
   .doc-meta { color: var(--muted); font-size: 12px; }
-  .doc-actions { display: flex; gap: 8px; }
-  .doc-actions a {
+  .doc-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .doc-actions .act {
     font-size: 12px; padding: 5px 10px; border-radius: 6px; text-decoration: none;
-    border: 1px solid var(--border); color: var(--text);
+    border: 1px solid var(--border); color: var(--text); background: transparent;
+    cursor: pointer; font-family: inherit;
   }
-  .doc-actions a:hover { border-color: var(--accent); color: var(--accent); }
+  .doc-actions .act:hover { border-color: var(--accent); color: var(--accent); }
+  .doc-actions .act.primary { border-color: var(--accent); color: var(--accent); }
   .empty-note { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0; }
+
+  .msg { font-size: 12px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; display: none; }
+  .msg.show { display: block; }
+  .msg.success { background: #12281c; color: var(--success); }
+  .msg.error { background: #2b1416; color: #ff8a8e; }
+  .msg.info { background: #1c2436; color: #8fb0ff; }
+
+  .invoice-panel {
+    display: none; margin: 4px 0 10px; padding: 12px; border: 1px dashed var(--border);
+    border-radius: 8px; background: #12151b;
+  }
+  .invoice-panel.open { display: block; }
+  .avoirs-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .avoir-row { display: grid; grid-template-columns: 1fr 1.4fr 110px 28px; gap: 8px; margin-bottom: 8px; }
+  .avoir-row input {
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: #0c0e12; color: var(--text); font-size: 12px; min-width: 0;
+  }
+  .avoir-row .rm { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .panel-buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+
+  /* Contenu du lot */
+  .summary { font-size: 12px; color: var(--muted); margin: 0 0 6px; line-height: 1.7; }
+  .summary strong { color: var(--text); }
+  .warn { color: #e9b949; font-size: 12px; margin-bottom: 8px; }
+  .devices-wrap { overflow-x: auto; }
+  table.devices { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.devices th {
+    text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.devices td { padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.devices .num { text-align: right; }
+  .tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 999px; margin-left: 6px;
+    background: #23304a; color: #7ea6ff;
+  }
+  .tag.budget { background: #3a2f16; color: #e9b949; }
+  .no-price { color: #ff8a8e; }
 
   #emptyState, #loadingState, #errorState {
     text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px;
@@ -115,7 +164,10 @@
 <div class="container" id="appScreen" style="display:none;">
   <header class="top">
     <h1>Lots en cours</h1>
-    <button class="btn secondary" id="logoutBtn">Se déconnecter</button>
+    <div class="actions">
+      <button class="btn secondary" id="refreshBtn">Actualiser</button>
+      <button class="btn secondary" id="logoutBtn">Se déconnecter</button>
+    </div>
   </header>
 
   <div id="loadingState">Chargement des lots…</div>
@@ -126,12 +178,13 @@
 
 <script>
   // ============================================================
-  // ⚠️ À REMPLIR avant déploiement
+  // Configuration
   // ============================================================
   const SUPABASE_URL = "https://zvqoxgugzfxbkhmqgvdk.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2cW94Z3VnemZ4YmtobXFndmRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MjUzMDcsImV4cCI6MjA2NjQwMTMwN30.vdpTmNn2yhu1mnbmC-LamuvBvqD_Q8DGZ2GYNEZyux0";
   // ============================================================
 
+  // Nommé "sb" : le CDN déclare déjà une variable globale "supabase"
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const loginScreen = document.getElementById("loginScreen");
@@ -142,13 +195,110 @@
   const emptyState = document.getElementById("emptyState");
   const lotsList = document.getElementById("lotsList");
 
+  const EXCLUDED_STATUSES = ["Vendu", "Restitué", "Annulé", "Refusé"];
+
+  // ------------------------------------------------------------
+  // Utilitaires
+  // ------------------------------------------------------------
+  function escapeHtml(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function fmtDate(d) {
+    if (!d) return "-";
+    return new Date(d).toLocaleDateString("fr-FR");
+  }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined) return "-";
+    return Number(n).toFixed(2) + " €";
+  }
+
+  function round2(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  function parseAmount(v) {
+    const n = parseFloat(String(v).trim().replace(",", "."));
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function showMsg(el, kind, text) {
+    el.className = "msg show " + kind;
+    el.textContent = text;
+  }
+
+  function clearMsg(el) {
+    el.className = "msg";
+    el.textContent = "";
+  }
+
+  function setBusy(btn, busy, busyText) {
+    if (busy) {
+      btn.dataset.label = btn.textContent;
+      btn.textContent = busyText;
+      btn.disabled = true;
+    } else {
+      btn.textContent = btn.dataset.label ?? btn.textContent;
+      btn.disabled = false;
+    }
+  }
+
+  // Appelle une edge function et remonte le message d'erreur renvoyé
+  // par la fonction (ex. "devis déjà émis"), pas un message générique.
+  async function callFunction(name, body) {
+    const { data, error } = await sb.functions.invoke(name, { body });
+    if (error) {
+      let message = error.message || "Erreur inconnue";
+      try {
+        const payload = await error.context.json();
+        if (payload && payload.error) {
+          message = payload.error;
+          if (typeof payload.details === "string") {
+            message += " — " + payload.details;
+          } else if (payload.details && payload.details.message) {
+            message += " — " + payload.details.message;
+          }
+        }
+      } catch (_) {
+        // pas de corps JSON exploitable : on garde le message générique
+      }
+      throw new Error(message);
+    }
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  }
+
+  // Le PDF est hébergé sur un autre domaine : l'attribut HTML "download"
+  // y est ignoré. On récupère le fichier puis on force le téléchargement ;
+  // si le navigateur refuse (CORS), on l'ouvre dans un nouvel onglet.
+  async function downloadPdf(url, filename) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (_) {
+      window.open(url, "_blank", "noopener");
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Authentification
+  // ------------------------------------------------------------
   async function init() {
     const { data: { session } } = await sb.auth.getSession();
-    if (session) {
-      showApp();
-    } else {
-      showLogin();
-    }
+    if (session) showApp(); else showLogin();
   }
 
   function showLogin() {
@@ -180,23 +330,24 @@
     showApp();
   });
 
+  document.getElementById("password").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("loginBtn").click();
+  });
+
   document.getElementById("logoutBtn").addEventListener("click", async () => {
     await sb.auth.signOut();
     showLogin();
   });
 
-  function fmtDate(d) {
-    if (!d) return "-";
-    return new Date(d).toLocaleDateString("fr-FR");
-  }
+  document.getElementById("refreshBtn").addEventListener("click", () => loadLots());
 
-  function fmtMoney(n) {
-    if (n === null || n === undefined) return "-";
-    return Number(n).toFixed(2) + " €";
-  }
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") showLogin();
+  });
 
-  const EXCLUDED_STATUSES = ["Vendu", "Restitué", "Annulé", "Refusé"];
-
+  // ------------------------------------------------------------
+  // Liste des lots actifs
+  // ------------------------------------------------------------
   async function loadLots() {
     loadingState.style.display = "block";
     errorState.style.display = "none";
@@ -211,7 +362,7 @@
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await sb
         .from("sales_purchase_lots")
-        .select("id, name, type, created_at, client_id, supplier_id, clients(name), suppliers(name)")
+        .select("id, name, type, created_at, client_id, supplier_id, clients(name, margin), suppliers(name)")
         .eq("archived", false)
         .order("created_at", { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -298,6 +449,9 @@
     }
   }
 
+  // ------------------------------------------------------------
+  // Carte d'un lot
+  // ------------------------------------------------------------
   function renderLotCard(lot) {
     const card = document.createElement("div");
     card.className = "lot-card";
@@ -307,7 +461,7 @@
     header.innerHTML = `
       <div>
         <div class="lot-title">${escapeHtml(lot.name)}</div>
-        <div class="lot-sub">${escapeHtml(lot.client_name ?? "-")} · ${escapeHtml(lot.supplier_name ?? "-")}</div>
+        <div class="lot-sub">${escapeHtml(lot.client_name ?? "-")} · ${escapeHtml(lot.supplier_name ?? "-")}${lot.type ? " · " + escapeHtml(lot.type) : ""}</div>
       </div>
       <div style="display:flex; align-items:center; gap:12px;">
         <span class="status-badge">${escapeHtml(lot.last_status ?? "-")}</span>
@@ -317,7 +471,39 @@
 
     const body = document.createElement("div");
     body.className = "lot-body";
-    body.innerHTML = `<div class="empty-note">Chargement des documents…</div>`;
+
+    // Zone "génération de devis"
+    const actionsEl = document.createElement("div");
+    actionsEl.innerHTML = `
+      <div class="generate-bar">
+        <button class="btn small" data-role="gen-quote">Générer un devis</button>
+        <label>
+          <input type="checkbox" data-role="ref-interne" />
+          Référence interne (code-barres) au lieu de la référence prestation
+        </label>
+      </div>
+      <div class="msg" data-role="lot-msg"></div>
+    `;
+
+    const docsEl = document.createElement("div");
+    const devicesEl = document.createElement("div");
+    devicesEl.className = "lot-section";
+
+    body.append(actionsEl, docsEl, devicesEl);
+
+    const lotMsgEl = actionsEl.querySelector('[data-role="lot-msg"]');
+    const ctx = {
+      lot,
+      docsEl,
+      lotMsg: (kind, text) => showMsg(lotMsgEl, kind, text),
+      clearLotMsg: () => clearMsg(lotMsgEl),
+    };
+
+    const genQuoteBtn = actionsEl.querySelector('[data-role="gen-quote"]');
+    const refInterneBox = actionsEl.querySelector('[data-role="ref-interne"]');
+    genQuoteBtn.addEventListener("click", () =>
+      onGenerateQuote(ctx, genQuoteBtn, refInterneBox.checked)
+    );
 
     let loaded = false;
     header.addEventListener("click", async () => {
@@ -325,7 +511,7 @@
       header.querySelector(".chevron").classList.toggle("open", isOpen);
       if (isOpen && !loaded) {
         loaded = true;
-        await renderDocuments(body, lot.id);
+        await Promise.all([loadDocuments(ctx), loadDevices(lot, devicesEl)]);
       }
     });
 
@@ -334,21 +520,124 @@
     return card;
   }
 
-  async function renderDocuments(container, lotId) {
+  // ------------------------------------------------------------
+  // Contenu du lot (appareils + prix)
+  // ------------------------------------------------------------
+  function unwrapDevices(data) {
+    if (!Array.isArray(data)) return [];
+    // forme alternative éventuelle : [{ array_agg: [...] }]
+    if (data.length === 1 && data[0] && Array.isArray(data[0].array_agg)) {
+      return data[0].array_agg;
+    }
+    return data;
+  }
+
+  // Même ordre de priorité que la génération du devis :
+  // prix personnalisé > prix auto du lot > prix budget.
+  function basePriceOf(d) {
+    if (d.sale_price_custom != null) return { value: Number(d.sale_price_custom), source: "perso" };
+    if (d.sale_price_client != null) return { value: Number(d.sale_price_client), source: "auto" };
+    if (d.sale_price_auto != null) return { value: Number(d.sale_price_auto), source: "budget" };
+    return { value: null, source: null };
+  }
+
+  async function loadDevices(lot, el) {
+    el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Chargement du contenu…</div>`;
+
+    const { data, error } = await sb.rpc("get_salelot_devices", {
+      salelot_id_param: lot.id,
+      files_param: false,
+    });
+
+    if (error) {
+      el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Erreur : ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+
+    const devices = unwrapDevices(data);
+    if (devices.length === 0) {
+      el.innerHTML = `<h4>Contenu du lot</h4><div class="empty-note">Aucun appareil dans ce lot.</div>`;
+      return;
+    }
+
+    const margin = lot.clients?.margin ?? 1;
+    let totalBase = 0;
+    let totalQuote = 0;
+    let noPrice = 0;
+
+    const rows = devices
+      .map((d) => {
+        const p = basePriceOf(d);
+        if (p.value === null) noPrice++;
+        const base = p.value ?? 0;
+        totalBase += base;
+        totalQuote += round2(base * margin);
+
+        const priceCell =
+          p.value === null
+            ? `<span class="no-price">sans prix</span>`
+            : `${fmtMoney(p.value)}<span class="tag ${p.source === "budget" ? "budget" : ""}">${p.source}</span>`;
+
+        return `
+          <tr>
+            <td>${escapeHtml(d.barcode)}</td>
+            <td>${escapeHtml(d.service_provision_reference ?? "")}</td>
+            <td>${escapeHtml(d.service_sub_category_name ?? "")}</td>
+            <td>${escapeHtml(d.brand_name ?? "")}</td>
+            <td>${escapeHtml(d.model ?? "")}</td>
+            <td>${escapeHtml(d.quality_grade ?? "")}</td>
+            <td class="num">${d.price_new != null ? fmtMoney(d.price_new) : "-"}</td>
+            <td class="num">${priceCell}</td>
+          </tr>`;
+      })
+      .join("");
+
+    el.innerHTML = `
+      <h4>Contenu du lot</h4>
+      <div class="summary">
+        <strong>${devices.length}</strong> appareil(s) ·
+        Total prix de base <strong>${fmtMoney(totalBase)}</strong> ·
+        Coefficient client <strong>×${String(margin).replace(".", ",")}</strong> ·
+        Devis HT estimé <strong>${fmtMoney(totalQuote)}</strong>
+      </div>
+      ${noPrice ? `<div class="warn">⚠ ${noPrice} appareil(s) sans prix : ils seraient comptés à 0 € dans le devis.</div>` : ""}
+      <div class="devices-wrap">
+        <table class="devices">
+          <thead>
+            <tr>
+              <th>Code-barres</th><th>Réf. prestation</th><th>Type</th><th>Marque</th>
+              <th>Modèle</th><th>Grade</th><th class="num">Prix neuf</th><th class="num">Prix</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------
+  // Devis et factures d'un lot
+  // ------------------------------------------------------------
+  async function loadDocuments(ctx) {
+    const { lot, docsEl } = ctx;
+
     const { data: quotes, error: quotesError } = await sb
       .from("quote")
-      .select("id, reference, status, total_ttc, pdf_url, created_at")
-      .eq("sale_purchase_lot_id", lotId)
+      .select("id, reference, status, subtotal_ht, total_ttc, pdf_url, created_at")
+      .eq("sale_purchase_lot_id", lot.id)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false });
 
     if (quotesError) {
-      container.innerHTML = `<div class="empty-note">Erreur devis : ${escapeHtml(quotesError.message)}</div>`;
+      docsEl.innerHTML = `<div class="lot-section"><div class="empty-note">Erreur devis : ${escapeHtml(quotesError.message)}</div></div>`;
       return;
     }
 
+    lot.activeQuote = (quotes ?? [])[0] ?? null;
+
     const quoteIds = (quotes ?? []).map((q) => q.id);
     let invoices = [];
+    let invoicesError = null;
     if (quoteIds.length > 0) {
       const { data: inv, error: invError } = await sb
         .from("invoice")
@@ -356,55 +645,199 @@
         .in("quote_id", quoteIds)
         .neq("status", "cancelled")
         .order("created_at", { ascending: false });
-      if (!invError) invoices = inv ?? [];
+      if (invError) invoicesError = invError; else invoices = inv ?? [];
     }
 
-    container.innerHTML = `
-      <div class="doc-section">
-        <h4>Devis</h4>
-        ${
-          quotes && quotes.length
-            ? quotes.map(docRowHtml).join("")
-            : `<div class="empty-note">Aucun devis actif.</div>`
-        }
-      </div>
-      <div class="doc-section">
-        <h4>Factures</h4>
-        ${
-          invoices.length
-            ? invoices.map(docRowHtml).join("")
-            : `<div class="empty-note">Aucune facture active.</div>`
-        }
-      </div>
+    docsEl.innerHTML = `
+      <div class="lot-section"><h4>Devis</h4><div data-role="quotes"></div></div>
+      <div class="lot-section"><h4>Factures</h4><div data-role="invoices"></div></div>
     `;
+    const quotesEl = docsEl.querySelector('[data-role="quotes"]');
+    const invoicesEl = docsEl.querySelector('[data-role="invoices"]');
+
+    if (!quotes || quotes.length === 0) {
+      quotesEl.innerHTML = `<div class="empty-note">Aucun devis actif.</div>`;
+    } else {
+      for (const q of quotes) {
+        const activeInvoice = invoices.find((i) => i.quote_id === q.id) ?? null;
+        quotesEl.appendChild(renderQuoteItem(ctx, q, activeInvoice));
+      }
+    }
+
+    if (invoicesError) {
+      invoicesEl.innerHTML = `<div class="empty-note">Erreur factures : ${escapeHtml(invoicesError.message)}</div>`;
+    } else if (invoices.length === 0) {
+      invoicesEl.innerHTML = `<div class="empty-note">Aucune facture active.</div>`;
+    } else {
+      for (const inv of invoices) {
+        const item = document.createElement("div");
+        item.className = "doc-item";
+        item.innerHTML = docRowHtml(inv, null);
+        attachDownload(item, inv);
+        invoicesEl.appendChild(item);
+      }
+    }
   }
 
-  function docRowHtml(doc) {
+  function docRowHtml(doc, extraLabel) {
     const hasPdf = !!doc.pdf_url;
     return `
       <div class="doc-row">
         <div>
           <div class="doc-ref">${escapeHtml(doc.reference)}</div>
-          <div class="doc-meta">${fmtDate(doc.created_at)} · ${fmtMoney(doc.total_ttc)} · ${escapeHtml(doc.status)}</div>
+          <div class="doc-meta">${fmtDate(doc.created_at)} · ${fmtMoney(doc.total_ttc)} TTC · ${escapeHtml(doc.status)}</div>
         </div>
         <div class="doc-actions">
           ${
             hasPdf
-              ? `<a href="${doc.pdf_url}" target="_blank" rel="noopener">Aperçu</a>
-                 <a href="${doc.pdf_url}" download>Télécharger</a>`
+              ? `<a class="act" href="${escapeHtml(doc.pdf_url)}" target="_blank" rel="noopener">Aperçu</a>
+                 <button class="act" data-role="download">Télécharger</button>`
               : `<span class="doc-meta">PDF indisponible</span>`
           }
+          ${extraLabel ? `<button class="act primary" data-role="invoice-toggle">${escapeHtml(extraLabel)}</button>` : ""}
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  function escapeHtml(str) {
-    return String(str ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+  function attachDownload(root, doc) {
+    const btn = root.querySelector('[data-role="download"]');
+    if (btn) btn.addEventListener("click", () => downloadPdf(doc.pdf_url, doc.reference + ".pdf"));
+  }
+
+  // ------------------------------------------------------------
+  // Génération d'un devis
+  // ------------------------------------------------------------
+  async function onGenerateQuote(ctx, btn, refInterne) {
+    const { lot } = ctx;
+    ctx.clearLotMsg();
+
+    if (lot.activeQuote) {
+      const ok = confirm(
+        `Un devis actif existe déjà (${lot.activeQuote.reference}).\n\n` +
+        `S'il diffère du nouveau, il sera annulé, ainsi que sa facture éventuelle.\n` +
+        `(S'il est identique, rien ne sera créé.)\n\nContinuer ?`
+      );
+      if (!ok) return;
+    }
+
+    setBusy(btn, true, "Génération…");
+    try {
+      const data = await callFunction("generate-quote", {
+        sale_purchase_lot_id: lot.id,
+        ref_interne: refInterne,
+      });
+      ctx.lotMsg("success", `Devis ${data.quote.reference} généré.`);
+      await loadDocuments(ctx);
+    } catch (e) {
+      const already = /déjà émis/i.test(e.message);
+      ctx.lotMsg(already ? "info" : "error", already ? "Devis déjà émis : rien n'a changé depuis le dernier devis." : e.message);
+    } finally {
+      setBusy(btn, false);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Un devis + son panneau de facturation (avec avoirs)
+  // ------------------------------------------------------------
+  function renderQuoteItem(ctx, quote, activeInvoice) {
+    const item = document.createElement("div");
+    item.className = "doc-item";
+    item.innerHTML = docRowHtml(quote, activeInvoice ? "Refacturer" : "Facturer");
+    attachDownload(item, quote);
+
+    const panel = document.createElement("div");
+    panel.className = "invoice-panel";
+    panel.innerHTML = `
+      ${activeInvoice ? `<div class="msg show info">Ce devis a déjà la facture ${escapeHtml(activeInvoice.reference)} : elle sera annulée et remplacée.</div>` : ""}
+      <div class="avoirs-title">Avoirs à déduire (montant hors taxe) — facultatif</div>
+      <div data-role="avoirs"></div>
+      <div class="panel-buttons">
+        <button class="btn secondary small" data-role="add-avoir" type="button">+ Ajouter un avoir</button>
+        <button class="btn small" data-role="gen-invoice" type="button">Générer la facture</button>
+      </div>
+      <div class="msg" data-role="invoice-msg"></div>
+    `;
+    item.appendChild(panel);
+
+    const avoirsEl = panel.querySelector('[data-role="avoirs"]');
+    const msgEl = panel.querySelector('[data-role="invoice-msg"]');
+    const genBtn = panel.querySelector('[data-role="gen-invoice"]');
+
+    item.querySelector('[data-role="invoice-toggle"]').addEventListener("click", () => {
+      panel.classList.toggle("open");
+    });
+
+    panel.querySelector('[data-role="add-avoir"]').addEventListener("click", () => addAvoirRow(avoirsEl));
+
+    genBtn.addEventListener("click", async () => {
+      clearMsg(msgEl);
+
+      let avoirs;
+      try {
+        avoirs = collectAvoirs(avoirsEl);
+        const total = avoirs.reduce((s, a) => s + a.amount, 0);
+        if (quote.subtotal_ht != null && total > Number(quote.subtotal_ht)) {
+          throw new Error(
+            `Les avoirs (${fmtMoney(total)}) dépassent le montant HT du devis (${fmtMoney(quote.subtotal_ht)}).`
+          );
+        }
+      } catch (e) {
+        showMsg(msgEl, "error", e.message);
+        return;
+      }
+
+      if (activeInvoice) {
+        const ok = confirm(
+          `La facture ${activeInvoice.reference} sera annulée et remplacée par une nouvelle facture (nouveau numéro).\n\n` +
+          `Les avoirs de l'ancienne facture ne sont pas repris : ressaisissez-les ci-dessus si nécessaire.\n\nContinuer ?`
+        );
+        if (!ok) return;
+      }
+
+      setBusy(genBtn, true, "Génération…");
+      try {
+        const data = await callFunction("generate-invoice", {
+          quote_id: quote.id,
+          credit_notes: avoirs,
+        });
+        ctx.lotMsg("success", `Facture ${data.invoice.reference} générée.`);
+        await loadDocuments(ctx); // reconstruit la liste : ce panneau disparaît
+      } catch (e) {
+        showMsg(msgEl, "error", e.message);
+        setBusy(genBtn, false);
+      }
+    });
+
+    return item;
+  }
+
+  function addAvoirRow(container) {
+    const row = document.createElement("div");
+    row.className = "avoir-row";
+    row.innerHTML = `
+      <input type="text" placeholder="Référence" data-f="reference" />
+      <input type="text" placeholder="Libellé (optionnel)" data-f="label" />
+      <input type="text" inputmode="decimal" placeholder="Montant HT" data-f="amount" />
+      <button class="rm" type="button" title="Retirer">×</button>
+    `;
+    row.querySelector(".rm").addEventListener("click", () => row.remove());
+    container.appendChild(row);
+  }
+
+  function collectAvoirs(container) {
+    const avoirs = [];
+    for (const row of container.querySelectorAll(".avoir-row")) {
+      const reference = row.querySelector('[data-f="reference"]').value.trim();
+      const label = row.querySelector('[data-f="label"]').value.trim();
+      const rawAmount = row.querySelector('[data-f="amount"]').value.trim();
+      if (!reference && !label && !rawAmount) continue; // ligne vide ignorée
+
+      const amount = parseAmount(rawAmount);
+      if (!reference) throw new Error("Chaque avoir doit avoir une référence.");
+      if (!(amount > 0)) throw new Error(`Montant invalide pour l'avoir « ${reference} ».`);
+      avoirs.push({ reference, amount: round2(amount), label: label || "Avoir" });
+    }
+    return avoirs;
   }
 
   init();
