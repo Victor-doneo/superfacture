@@ -866,6 +866,14 @@
       });
       ctx.lotMsg("success", `Devis ${data.quote.reference} généré.`);
       await loadDocuments(ctx);
+      // Recharge aussi le contenu du lot : sa comparaison avec « le devis actuel »
+      // doit porter sur le devis qui vient d'être créé, pas sur le précédent.
+      // Un échec de ce rechargement ne doit pas faire passer le devis pour raté.
+      try {
+        await loadDevices(lot, ctx.devicesEl);
+      } catch (_) {
+        /* l'aperçu sera rechargé à la prochaine ouverture */
+      }
     } catch (e) {
       const already = /déjà émis/i.test(e.message);
       ctx.lotMsg(already ? "info" : "error", already ? "Devis déjà émis : rien n'a changé depuis le dernier devis." : e.message);
